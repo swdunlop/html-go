@@ -44,62 +44,56 @@ func (v List) Save(text string) List {
 }
 
 func (v List) AppendHTML(buf []byte) []byte {
-	content := make([]html.Element, len(v.Items))
-	for i, it := range v.Items {
-		if i == v.Editing {
-			content[i] = it.editor()
+	ix := 0
+	return tag.New(`ul`).Add(html.Map(v.Items, func(it Item) (view html.Content) {
+		if ix == v.Editing {
+			view = it.editor()
 		} else {
-			content[i] = it.viewer()
+			view = it.viewer()
 		}
-	}
-	return unsortedList(tag.Content(content...), newButton).AppendHTML(buf)
+		ix++
+		return
+	})).AppendHTML(buf)
 }
 
 // Item represents a single todo item.
 type Item string
 
-func (it Item) editor() html.Tag {
-	return listItem(
-		editableText(string(it)),
+func (it Item) editor() html.Content {
+	return tag.New(`li`).Add(
+		doneButton,
+		tag.New(`span[contenteditable=true]`).Text(it),
 		saveButton,
 	)
 }
 
-func (it Item) viewer() html.Tag {
-	return listItem(
+func (it Item) viewer() html.Content {
+	return tag.New(`li`).Add(
 		doneButton,
-		tag.Text(string(it)),
+		html.Text(it),
 		editButton,
 	)
 }
 
 // unsortedList creates unsorted list tags.
-var unsortedList = tag.Factory(`ul`)
+var unsortedList = tag.New(`ul`)
 
 // listItem creates list item tags.
-var listItem = tag.Factory(`li`)
+var listItem = tag.New(`li`)
 
 // editableText wraps text into an span that is content editable.
-func editableText(text string, options ...tag.Option) tag.Option {
-	return tag.Content(tag.New(`span`, tag.Text(text), contentEditable, tag.Apply(options...)))
-}
+var editableText = tag.New(`span[contenteditable=true]`)
 
-// contentEditable sets the content editable attribute to true on a tag.
-var contentEditable = tag.Attr(`contenteditable`, `true`)
+var (
+	// newButton is a static "New" button with id class "new".
+	newButton = html.Static(tag.New(`button.new`).Text(`New`))
 
-// newButton is a static "New" button with id class "new".
-var newButton = tag.Static(button(`new`, `New`))
+	// doneButton is a static "Done" button with class "done".
+	doneButton = html.Static(tag.New(`button.done`).Text(`Done`))
 
-// doneButton is a static "Done" button with class "done".
-var doneButton = tag.Static(button(`done`, `Done`))
+	// editButton is a static "Edit" button with class "edit".
+	editButton = html.Static(tag.New(`button.edit`).Text(`Edit`))
 
-// editButton is a static "Edit" button with class "edit".
-var editButton = tag.Static(button(`edit`, `Edit`))
-
-// saveButton is a static "Save" button with class "save".
-var saveButton = tag.Static(button(`save`, `Save`))
-
-// button creates a button tag with a class and label.
-func button(class, label string, options ...tag.Option) html.Tag {
-	return tag.New(`button`, tag.Attr(`class`, class), tag.Text(label))
-}
+	// saveButton is a static "Save" button with class "save".
+	saveButton = html.Static(tag.New(`button.save`).Text(`Save`))
+)
