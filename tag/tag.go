@@ -21,7 +21,7 @@ import (
 func New(selector string, content ...html.Content) Interface {
 	var t tag
 	t.parseSelector(selector)
-	t.content = append(t.content, content...)
+	t.content = extend(t.content, content...)
 	return t
 }
 
@@ -132,6 +132,7 @@ func (t *tag) addLiteralAttribute(src string) {
 	buf := make([]byte, 0, len(tail)+2)
 	buf = appendValueStr(buf, tail)
 	attribute.tail = string(buf)
+	// append is safe here because we preallocate space for the attributes.
 	t.attributes = append(t.attributes, attribute)
 }
 
@@ -178,7 +179,7 @@ func (t tag) AppendHTML(buf []byte) []byte {
 }
 
 func (t tag) Class(classes ...string) Interface {
-	t.classes = append(t.classes, classes...)
+	t.classes = extend(t.classes, classes...)
 	return t
 }
 
@@ -204,14 +205,14 @@ func (t tag) Set(head string, values ...any) Interface {
 			return t
 		}
 	}
-	t.attributes = append(t.attributes, attribute{head: head, tail: string(tail)})
+	t.attributes = extend(t.attributes, attribute{head: head, tail: string(tail)})
 	return t
 }
 
 func (t tag) Text(data ...any) Interface { return t.Add(html.Text(fmt.Sprint(data...))) }
 
 func (t tag) Add(content ...html.Content) Interface {
-	t.content = append(t.content, content...)
+	t.content = extend(t.content, content...)
 	return t
 }
 
@@ -247,4 +248,11 @@ func appendValueBytes(buf []byte, value []byte) []byte {
 		}
 	}
 	return buf
+}
+
+// extend is a helper function to extend a slice without using the capacity of the slice.
+func extend[T any](slice []T, values ...T) []T {
+	ret := make([]T, len(slice), len(slice)+len(values))
+	copy(ret, slice)
+	return append(ret, values...)
 }
