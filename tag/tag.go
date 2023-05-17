@@ -49,6 +49,9 @@ type Interface interface {
 
 	// Text will use fmt.Sprint to coerce data into text and add it as HTML content to the tag.
 	Text(data ...any) Interface
+
+	// HTML adds literal embedded HTML content.
+	HTML(content ...string) Interface
 }
 
 type tag struct {
@@ -207,6 +210,12 @@ func (t tag) Set(head string, values ...any) Interface {
 	}
 	t.attributes = extend(t.attributes, attribute{head: head, tail: string(tail)})
 	return t
+}
+
+func (t tag) HTML(content ...string) Interface {
+	return t.Add(html.Map(content, func(content string) html.Content {
+		return html.HTML(content)
+	}))
 }
 
 func (t tag) Text(data ...any) Interface { return t.Add(html.Text(fmt.Sprint(data...))) }

@@ -48,6 +48,9 @@ func Test(t *testing.T) {
 	test(t, `ADynamicHref`, `<a href='http://example.com'>example</a>`, func() Interface {
 		return New(`a`).Set(`href`, `http://example.com`).Text(`example`)
 	})
+	test(t, `ItalicLiteralHTML`, `<i><a href='http://example.com'>Example</a></i>`, func() Interface {
+		return New(`i`).HTML(`<a href='http://example.com'>Example</a>`)
+	})
 }
 
 func test(t *testing.T, name string, expect string, do func() Interface) {
