@@ -72,7 +72,56 @@ go run ./cmd/unpkg htmx.org@1.9.2 htmx.org@1.9.1/dist/ext/sse.js hyperscript.org
 <link rel="stylesheet" href="https://unpkg.com/chota@0.9.2/dist/chota.min.css" integrity="sha384-A2UBIkgVTcNWgv+snhw7PKvU/L9N0JqHwgwDwyNcbsLiVhGG5KAuR64N4wuDYd99" referrerpolicy="no-referrer" />
 ```
 
+### Simplified HTTP Logging With Chi and Zerolog
+
+This module includes the [hog](./hog/hog.go) package as an alternative to the 
+[httplog](https://github.com/go-chi/httplog) package.  Hog is less verbose than httplog and adds a per-request logger to 
+the request context for use by request handlers using `http.Request.WithContext` with `zerolog.WithContext` and 
+`zerolog.Ctx`.
+
+```go
+func main() {
+    // Zerolog's default logger uses JSON output, but this makes it more readable (and slower, since zerolog must
+    // generate JSON logs as normal and then parse them into text).
+    log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).
+        With().Timestamp().Logger()
+
+    // For some reason, zerolog.DefaultContextLogger is nil out of the box, and
+    // this is the default logger used by zerolog.Ctx (and therefore hog.For) --
+    // you must bind it to a logger if you want to see log output at all.
+    //
+    // Alternately, you can specify the logger in the request context before using
+    // hog, but it is generally easier to fix the problem at the source.
+    zerolog.DefaultContextLogger = &log.Logger
+
+    r := chi.NewRouter()
+    r.Use(hog.Middleware())
+    r.Get("/lazy", func(w http.ResponseWriter, r *http.Request) {
+        hog.For(r).Info().Msg("taking a nap..")
+        time.Sleep(1 * time.Second)
+        http.Error(w, "I'm awake!", http.StatusOK)
+    })
+    http.ListenAndServe(":8080", r)
+}
+```
+```
+~/swdunlop/html-go> go run ./examples/lazy
+10:58PM INF taking a nap.. method=GET remote_addr=127.0.0.1:60899 path=/lazy
+10:58PM INF method=GET remote_addr=127.0.0.1:60899 path=/lazy status=200 took=1001 wrote=11
+```
+
+You can access the injected logger with `hog.For(r)` from a request or `hog.From(ctx)` from a context.  The `For`, 
+`From`, and `Middleware` functions all accept a series of options that can be used to customize the logger.
+
+**WARNING**: The `hog` package will include the URL request path (but not the query) in the log output by default.  This
+may be a security concern for handlers like invite links that include sensitive information in the URL path.  You will 
+want to avoid using `hog.For`, `hog.From` and `hog.Middleware` for these handlers.
+
 ### Why?
 
 I find the `html/template` package frustrating outside of simple use cases and prefer to generate HTML directly in 
-view functions rather than deal with the awkwardness of Go templates.
+view functions rather than deal with the awkwardness of Go templates.  There are a lot of other interesting template
+languages for Go but they all have their own quirks and I find myself dropping down to writing Go functions anyway.
+
+Everything else in this package is just a collection of utilities for making life easier once you have decided to 
+write your UI in Go.
