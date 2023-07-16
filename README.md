@@ -117,11 +117,19 @@ You can access the injected logger with `hog.For(r)` from a request or `hog.From
 may be a security concern for handlers like invite links that include sensitive information in the URL path.  You will 
 want to avoid using `hog.For`, `hog.From` and `hog.Middleware` for these handlers.
 
+### Reloading Web UIs on Reconnect
+
+It is popular to use something like [Air](https://github.com/cosmtrek/air) to restart a server when source code
+changes, but if you are using your server to generate the HTML, you may also want to reload the view after restart.
+The "Dead Man Switch" component gives you a simple `net/http.Handler` and `html.Content` that can be combined to
+reload the view when the server restarts.  See [deadmanswitch/example](deadmanswitch/example/example.go) for a
+simple example -- run it, visit http://localhost:8181 and restart the server to see the UI change.
+
 ### Why?
 
-I find the `html/template` package frustrating outside of simple use cases and prefer to generate HTML directly in 
-view functions rather than deal with the awkwardness of Go templates.  There are a lot of other interesting template
-languages for Go but they all have their own quirks and I find myself dropping down to writing Go functions anyway.
+I found the `html/template` package frustrating outside of simple use cases and prefer to generate HTML directly in 
+view functions instead.  There are a lot of other interesting template languages for Go but they all have their own 
+quirks and I tend to just drop down to writing Go functions anyway.
 
 Everything else in this package is just a collection of utilities for making life easier once you have decided to 
 write your UI in Go.
