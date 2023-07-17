@@ -57,7 +57,7 @@ func resolve(path string) (string, error) {
 	case `application/javascript`:
 		template = `<script defer src="$url" integrity="$integrity" crossorigin="anonymous" referrerpolicy="no-referrer"></script>`
 	case `text/css`:
-		template = `<link rel="stylesheet" href="$url" integrity="$integrity" referrerpolicy="no-referrer">`
+		template = `<link rel="stylesheet" href="$url" integrity="$integrity" crossorigin="anonymous" referrerpolicy="no-referrer">`
 	default:
 		return ``, fmt.Errorf(`unknown content type %q`, meta.ContentType)
 	}
