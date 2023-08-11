@@ -72,6 +72,13 @@ go run ./cmd/unpkg htmx.org@1.9.2 htmx.org@1.9.1/dist/ext/sse.js hyperscript.org
 <link rel="stylesheet" href="https://unpkg.com/chota@0.9.2/dist/chota.min.css" integrity="sha384-A2UBIkgVTcNWgv+snhw7PKvU/L9N0JqHwgwDwyNcbsLiVhGG5KAuR64N4wuDYd99" referrerpolicy="no-referrer" />
 ```
 
+### Rendering Go Values Using Dataview
+
+The [dataview](./dataview) package provides a simple way to render Go values as HTML tables if the values can be
+represented as JSON.  See [examples/dataview](./examples/dataview) for a simple example.
+
+![Dataview Example](./examples/dataview/screenshot.png)
+
 ### Simplified HTTP Logging With Chi and Zerolog
 
 This module includes the [hog](./hog/hog.go) package as an alternative to the 
