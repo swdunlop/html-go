@@ -56,6 +56,10 @@ type Interface interface {
 
 	// HTML adds literal embedded HTML content.
 	HTML(content ...string) Interface
+
+	// Defer will add a html.Func to the tag which is only called when the tag is appended to a buffer.  This will be
+	// called each time the tag is appended.
+	Defer(f func() html.Content) Interface
 }
 
 type tag struct {
@@ -236,6 +240,8 @@ func (t tag) HTML(content ...string) Interface {
 }
 
 func (t tag) Text(data ...any) Interface { return t.Add(html.Text(fmt.Sprint(data...))) }
+
+func (t tag) Defer(fn func() html.Content) Interface { return t.Add(html.Func(fn)) }
 
 func (t tag) Add(content ...html.Content) Interface {
 	t.content = extend(t.content, content...)
