@@ -10,8 +10,8 @@ import (
 
 // RenderPage renders a full page if the X-Alpine-Target header is not present, otherwise, it uses Render to
 // render the requested parts of the page.
-func RenderPage(r http.Request, page func() html.Content, parts ...Part) html.Content {
-	targets := determineRequestTargets(&r)
+func RenderPage(r *http.Request, page func() html.Content, parts ...Part) html.Content {
+	targets := determineRequestTargets(r)
 	if len(targets) == 0 {
 		return page()
 	}

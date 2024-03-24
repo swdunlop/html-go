@@ -31,6 +31,10 @@ type Interface interface {
 	// AppendHTML implements html.Content by appending the tag and its content to the buffer.
 	AppendHTML(buf []byte) []byte
 
+	// ID will return the ID of the tag or an empty string if no ID was set.  If you want to set the ID of the tag,
+	// either specify it in the selector or use the "Set" method.
+	ID() string
+
 	// Class will append classes to the tag, but not remove the previous classes.  If you want to reset the set
 	// of classes, use the "Attribute" method.
 	Class(classes ...string) Interface
@@ -56,6 +60,7 @@ type Interface interface {
 
 type tag struct {
 	name       string
+	id         string
 	classes    []string
 	attributes []attribute
 	content    []html.Content
@@ -116,6 +121,7 @@ func (t *tag) parseSelector(src string) {
 		t.classes = []string{class}
 	}
 	if id != "" {
+		t.id = id
 		t.attributes[0] = attribute{`id`, id}
 	} else {
 		t.attributes = t.attributes[1:]
@@ -135,6 +141,10 @@ func (t *tag) addLiteralAttribute(src string) {
 	buf := make([]byte, 0, len(tail)+2)
 	buf = appendValueStr(buf, tail)
 	attribute.tail = string(buf)
+	if attribute.head == `id` {
+		t.id = attribute.tail
+		return // do not add id as an attribute, otherwise it will be duplicated.
+	}
 	// append is safe here because we preallocate space for the attributes.
 	t.attributes = append(t.attributes, attribute)
 }
@@ -181,6 +191,8 @@ func (t tag) AppendHTML(buf []byte) []byte {
 	return buf
 }
 
+func (t tag) ID() string { return t.id }
+
 func (t tag) Class(classes ...string) Interface {
 	t.classes = extend(t.classes, classes...)
 	return t
@@ -195,11 +207,16 @@ func (t tag) Set(head string, values ...any) Interface {
 	for _, value := range values {
 		tail = appendValue(tail, value)
 	}
-	if head == `class` {
+	switch head {
+	case `class`:
 		// as a special case, if class is set, we replace the existing classes
 		t.classes = []string{string(tail)}
 		return t
+	case `id`:
+		t.id = string(tail)
+		return t
 	}
+
 	for i := range t.attributes {
 		if t.attributes[i].head == head {
 			// copy the attributes so we do not modify the original
