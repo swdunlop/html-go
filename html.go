@@ -2,7 +2,7 @@
 package html
 
 // Map will apply a function to each item in the slice to return content.
-func Map[T any](slice []T, fn func(T) Content) Group {
+func Map[S ~[]E, E any](slice S, fn func(E) Content) Group {
 	result := make(Group, len(slice))
 	for i, item := range slice {
 		result[i] = fn(item)
@@ -74,3 +74,9 @@ func AppendText(buf []byte, text string) []byte {
 	}
 	return buf
 }
+
+// A Func is content that only generates content when needed.
+type Func func() Content
+
+// AppendHTML implements Content by calling the function to get the content.
+func (fn Func) AppendHTML(buf []byte) []byte { return fn().AppendHTML(buf) }
