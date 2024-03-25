@@ -10,12 +10,16 @@ import (
 
 // RenderPage renders a full page if the X-Alpine-Target header is not present, otherwise, it uses Render to
 // render the requested parts of the page.
-func RenderPage(r *http.Request, page func() html.Content, parts ...Part) html.Content {
-	targets := determineRequestTargets(r)
-	if len(targets) == 0 {
-		return page()
+func RenderPage(r *http.Request, page func(PartMap) html.Content, parts ...Part) html.Content {
+	h := r.Header.Get(`X-Alpine-Target`)
+	if h != `` {
+		return render(h, parts...)
 	}
-	return render(targets, parts...)
+	table := make(PartMap, len(parts))
+	for _, part := range parts {
+		table[part.ID()] = part
+	}
+	return page(table)
 }
 
 // Render parses the X-Alpine-Target header and returns a html.Group containing only the requested parts, in the order
@@ -24,15 +28,11 @@ func RenderPage(r *http.Request, page func() html.Content, parts ...Part) html.C
 //
 // Parts with an empty ID will not be included in the output.
 func Render(r *http.Request, parts ...Part) html.Group {
-	targets := determineRequestTargets(r)
-	return render(targets, parts...)
+	h := r.Header.Get(`X-Alpine-Target`)
+	return render(h, parts...)
 }
 
-func determineRequestTargets(r *http.Request) map[string]struct{} {
-	h := r.Header.Get(`X-Alpine-Target`)
-	if h == `` {
-		return emptyAlpineTargets
-	}
+func render(h string, parts ...Part) html.Group {
 	seq := strings.Split(h, ` `)
 	targets := make(map[string]struct{}, len(seq))
 	for _, target := range seq {
@@ -41,12 +41,6 @@ func determineRequestTargets(r *http.Request) map[string]struct{} {
 		}
 		targets[target] = struct{}{}
 	}
-	return targets
-}
-
-var emptyAlpineTargets = map[string]struct{}{}
-
-func render(targets map[string]struct{}, parts ...Part) html.Group {
 	group := make(html.Group, 0, len(parts))
 	for _, part := range parts {
 		id := part.ID()
@@ -64,4 +58,16 @@ type Part interface {
 
 	// ID returns the ID of the part, which can be used as a target in the X-Alpine-Target header.
 	ID() string
+}
+
+// PartMap is a map of parts by ID provided to a page function by RenderPage.
+type PartMap map[string]Part
+
+// Get returns the content for the part with the given ID, or empty content if no such part exists.
+func (table PartMap) Get(id string) html.Content {
+	content, ok := table[id]
+	if !ok {
+		return html.Group{} // no content
+	}
+	return content
 }
