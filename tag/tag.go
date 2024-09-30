@@ -126,7 +126,6 @@ func (t *tag) parseSelector(src string) {
 	}
 	if id != "" {
 		t.id = id
-		t.attributes[0] = attribute{`id`, id}
 	} else {
 		t.attributes = t.attributes[1:]
 	}
@@ -164,6 +163,11 @@ func (t *tag) determineVoid() {
 func (t tag) AppendHTML(buf []byte) []byte {
 	buf = append(buf, '<')
 	buf = append(buf, t.name...)
+	if t.id != `` {
+		buf = append(buf, ` id='`...)
+		buf = html.AppendText(buf, t.id)
+		buf = append(buf, '\'')
+	}
 	if len(t.classes) > 0 {
 		buf = append(buf, ` class='`...)
 		buf = html.AppendText(buf, t.classes[0])
