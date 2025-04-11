@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -43,50 +45,96 @@ with SRI information and disabled referrer policy.
 `)
 }
 
-// Unpkg outputs a tag with SRI for the provided path on unpkg for the given path.
-// Example: unpkg react@latest react.min.js
 func resolve(path string) (string, error) {
-	pkg := strings.SplitN(path, `/`, 2)[0]
+	corrected, err := resolveUnpkgPath(path)
+	if err != nil {
+		return ``, err
+	}
+	if path != corrected {
+		// println(`..`, path, `->`, corrected)
+		path = corrected
+	}
 	meta, err := fetchUnpkgMeta(path)
 	if err != nil {
 		return ``, err
 	}
 
 	var template string
-	switch meta.ContentType {
-	case `application/javascript`:
-		template = `<script defer src="$url" integrity="$integrity" crossorigin="anonymous" referrerpolicy="no-referrer"></script>`
+	contentType := strings.SplitN(meta.Type, `;`, 2)[0]
+	switch contentType {
+	case `text/javascript`, `application/javascript`:
+		deferred := ``
+		if opt.Defer {
+			deferred = `defer ` // mind the space.
+		}
+		template = `<script ` + deferred + `src="$url" integrity="$integrity" crossorigin="anonymous" referrerpolicy="no-referrer"></script>`
 	case `text/css`:
 		template = `<link rel="stylesheet" href="$url" integrity="$integrity" crossorigin="anonymous" referrerpolicy="no-referrer">`
+	case ``:
+		return ``, fmt.Errorf(`no content type; Unpkg has changed its schema again?`)
 	default:
-		return ``, fmt.Errorf(`unknown content type %q`, meta.ContentType)
+		return ``, fmt.Errorf(`unknown content type %q`, contentType)
 	}
 	return expandHTML(template, map[string]string{
-		`pkg`:       pkg,
 		`path`:      meta.Path,
 		`integrity`: meta.Integrity,
-		`url`:       strings.TrimSuffix(meta.URL, `?meta`),
+		`url`:       `https://unpkg.com/` + path,
 	})
 }
 
-func fetchUnpkgMeta(path string) (*unpkgMeta, error) {
-	var err error
-	meta := new(unpkgMeta)
-	meta.URL, err = getJSON(meta, `https://unpkg.com/`+path+`?meta`)
+// resolveUnpkgPath lets unpkg redirect us to the full path, which includes the package, path and version.
+func resolveUnpkgPath(path string) (string, error) {
+	req, err := http.NewRequest(`GET`, `https://unpkg.com/`+path, nil)
+	if err != nil {
+		return path, err
+	}
+	rsp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return path, err
+	}
+	defer rsp.Body.Close()
+	defer io.Copy(io.Discard, rsp.Body)
+	return strings.TrimPrefix(rsp.Request.URL.Path, `/`), nil
+}
+
+func fetchUnpkgMeta(path string) (*fileMeta, error) {
+	m := rxResource.FindStringSubmatch(path)
+	if m == nil {
+		return nil, fmt.Errorf(`could not parse %q into package, file and version`, path)
+	}
+	// pkg, version, file := m[1], m[2], m[3]
+	pkg, filePath := m[1], m[3]
+
+	var meta packageMeta
+	url := `https://unpkg.com/` + pkg + `?meta`
+	err := getJSON(&meta, url)
 	if err != nil {
 		return nil, err
 	}
-	return meta, nil
+	for i := range meta.Files {
+		file := &meta.Files[i]
+		if file.Path == filePath {
+			return file, nil
+		}
+	}
+
+	return nil, fmt.Errorf(`could not find path %q in %v`, filePath, url)
 }
 
-type unpkgMeta struct {
-	URL          string `json:"url"`
-	Path         string `json:"path"`
-	Type         string `json:"type"`
-	ContentType  string `json:"contentType"`
-	Integrity    string `json:"integrity"`
-	LastModified string `json:"lastModified"`
-	Size         int64  `json:"size"`
+var rxResource = regexp.MustCompile(`^(@?[^@/]+)(@[^/@]+)?(/.*)$`)
+
+type packageMeta struct {
+	Package string
+	Version string
+	Prefix  string
+	Files   []fileMeta
+}
+
+type fileMeta struct {
+	Path      string
+	Size      int64
+	Type      string
+	Integrity string
 }
 
 // expandHTML expands the template the replaces the following in its expansions with HTML entities: '&', '"', and '<'
@@ -113,22 +161,21 @@ var entityReplacer = strings.NewReplacer(
 	`<`, `&lt;`,
 )
 
-func getJSON(v any, url string) (string, error) {
+func getJSON(v any, url string) error {
 	req, err := http.NewRequest(`GET`, url, nil)
 	if err != nil {
-		return url, err
+		return err
 	}
 	rsp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return url, err
+		return err
 	}
 	defer func() { _ = rsp.Body.Close() }()
-	url = rsp.Request.URL.String()
 	switch rsp.StatusCode {
 	case 200:
 		err = json.NewDecoder(rsp.Body).Decode(v)
-		return url, err
+		return err
 	default:
-		return url, fmt.Errorf(`%v while fetching %v`, rsp.Status, url)
+		return fmt.Errorf(`%v while fetching %v`, rsp.Status, url)
 	}
 }
