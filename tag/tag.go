@@ -126,9 +126,8 @@ func (t *tag) parseSelector(src string) {
 	}
 	if id != "" {
 		t.id = id
-	} else {
-		t.attributes = t.attributes[1:]
 	}
+	t.attributes = t.attributes[1:]
 	return
 }
 
