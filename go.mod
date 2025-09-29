@@ -1,12 +1,11 @@
 module github.com/swdunlop/html-go
 
-go 1.18
+go 1.24
 
 require (
 	github.com/go-chi/chi/v5 v5.0.8
 	github.com/rs/zerolog v1.29.1
 	github.com/tidwall/gjson v1.16.0
-	golang.org/x/crypto v0.18.0
 )
 
 require (
