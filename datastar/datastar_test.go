@@ -273,30 +273,30 @@ func TestElements(t *testing.T) {
 		{
 			name:     "basic elements",
 			content:  html.HTML("<div>Hello</div>"),
-			expected: "event: datastar-patch-elements\ndata: elements <div>Hello</div>\n",
+			expected: "event: datastar-patch-elements\ndata: elements <div>Hello</div>\n\n",
 		},
 		{
 			name:     "elements with mode",
 			content:  html.HTML("<div>Hello</div>"),
 			options:  []ElementsOption{Mode("morph")},
-			expected: "event: datastar-patch-elements\ndata: mode morph\ndata: elements <div>Hello</div>\n",
+			expected: "event: datastar-patch-elements\ndata: mode morph\ndata: elements <div>Hello</div>\n\n",
 		},
 		{
 			name:     "elements with selector",
 			content:  html.HTML("<div>Hello</div>"),
 			options:  []ElementsOption{Selector("#content")},
-			expected: "event: datastar-patch-elements\ndata: selector #content\ndata: elements <div>Hello</div>\n",
+			expected: "event: datastar-patch-elements\ndata: selector #content\ndata: elements <div>Hello</div>\n\n",
 		},
 		{
 			name:     "elements with mode and selector",
 			content:  html.HTML("<div>Hello</div>"),
 			options:  []ElementsOption{Mode("morph"), Selector("#content")},
-			expected: "event: datastar-patch-elements\ndata: mode morph\ndata: selector #content\ndata: elements <div>Hello</div>\n",
+			expected: "event: datastar-patch-elements\ndata: mode morph\ndata: selector #content\ndata: elements <div>Hello</div>\n\n",
 		},
 		{
 			name:     "elements with newlines",
 			content:  html.HTML("<div>\nHello\nWorld\n</div>"),
-			expected: "event: datastar-patch-elements\ndata: elements <div>&#10;Hello&#10;World&#10;</div>\n",
+			expected: "event: datastar-patch-elements\ndata: elements <div>&#10;Hello&#10;World&#10;</div>\n\n",
 		},
 	}
 
@@ -389,7 +389,7 @@ func TestBatch(t *testing.T) {
 	result := string(buf)
 
 	expected1 := "event: datastar-patch-signals\ndata: signals {\"user\":\"test\"}\n\n"
-	expected2 := "event: datastar-patch-elements\ndata: elements <div>Hello</div>\n"
+	expected2 := "event: datastar-patch-elements\ndata: elements <div>Hello</div>\n\n"
 	expected := expected1 + expected2
 
 	if result != expected {

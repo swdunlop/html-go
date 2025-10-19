@@ -204,7 +204,7 @@ func (p *elements) appendEvent(buf []byte) []byte {
 			buf = append(buf, `&#10;`...)
 		}
 	}
-	buf = append(buf, '\n')
+	buf = append(buf, '\n', '\n')
 	return buf
 }
 
