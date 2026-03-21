@@ -112,10 +112,9 @@ func (t *tag) parseSelector(src string) {
 			if pos == 0 {
 				panic(fmt.Errorf(`%q starts with [ but does not end with ]`, src))
 			}
+			// we ignore empty attributes, arguably we should panic.
 			if pos > 1 {
 				t.addLiteralAttribute(src[1:pos])
-			} else {
-				// ignore empty attributes, arguably we should panic.
 			}
 			pos++
 		}
@@ -128,18 +127,17 @@ func (t *tag) parseSelector(src string) {
 		t.id = id
 	}
 	t.attributes = t.attributes[1:]
-	return
 }
 
 func (t *tag) addLiteralAttribute(src string) {
-	ix := strings.IndexByte(src, '=')
-	if ix < 0 {
+	before, after, ok := strings.Cut(src, "=")
+	if !ok {
 		// assume a boolean attribute.
 		t.attributes = append(t.attributes, attribute{head: src})
 		return
 	}
-	attribute := attribute{head: src[:ix]}
-	tail := src[ix+1:]
+	attribute := attribute{head: before}
+	tail := after
 	buf := make([]byte, 0, len(tail)+2)
 	buf = appendValueStr(buf, tail)
 	attribute.tail = string(buf)
@@ -254,19 +252,6 @@ func (t tag) Add(content ...html.Content) Interface {
 type attribute struct {
 	head string
 	tail string
-}
-
-func fmtValue(values ...any) string {
-	if len(values) == 0 {
-		return ""
-	}
-	buf := make([]byte, 1, 64)
-	buf[0] = '\''
-	for _, value := range values {
-		buf = appendValue(buf, value)
-	}
-	buf = append(buf, '\'')
-	return string(buf)
 }
 
 func appendValue(buf []byte, value any) []byte       { return appendValueStr(buf, fmt.Sprint(value)) }

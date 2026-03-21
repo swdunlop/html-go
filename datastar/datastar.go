@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strconv"
@@ -58,7 +59,18 @@ func RequestStream(w http.ResponseWriter, r *http.Request) (Stream, error) {
 	if !ok {
 		return nil, fmt.Errorf(`response writer cannot be flushed`)
 	}
-	return stream{make([]byte, 0, 16384), wf}, startSSE(wf)
+	return NewStream(wf), startSSE(wf)
+}
+
+// NewStream creates a Stream that writes SSE events to w.  If w implements http.Flusher, events will be flushed
+// after each Emit call.  Unlike RequestStream, this does not negotiate content types or write HTTP headers, so
+// the caller is responsible for ensuring the client accepts SSE and that the appropriate headers are set.
+func NewStream(w io.Writer) Stream {
+	s := stream{buf: make([]byte, 0, 16384), out: w}
+	if f, ok := w.(http.Flusher); ok {
+		s.flusher = f
+	}
+	return s
 }
 
 func startSSE(wf writeFlusher) error {
@@ -86,8 +98,9 @@ func (err httpError) Error() string   { return err.err.Error() }
 func (err httpError) HTTPStatus() int { return err.status }
 
 type stream struct {
-	buf []byte
-	out writeFlusher
+	buf     []byte
+	out     io.Writer
+	flusher http.Flusher
 }
 
 func (sm stream) Emit(events ...Event) error {
@@ -99,8 +112,8 @@ func (sm stream) Emit(events ...Event) error {
 		buf = event.appendEvent(buf)
 	}
 	_, err := sm.out.Write(buf)
-	if err == nil {
-		sm.out.Flush()
+	if err == nil && sm.flusher != nil {
+		sm.flusher.Flush()
 	}
 	return err
 }
@@ -140,7 +153,7 @@ func Elements(content html.Content, options ...ElementsOption) Event {
 // This will panic if the mode contains a newline.
 func Mode(mode string) ElementsOption {
 	if strings.Contains(mode, "\n") {
-		panic(errors.New(`Modes cannot contain newlines`))
+		panic(errors.New(`modes cannot contain newlines`))
 	}
 	return func(p *elements) { p.mode = mode }
 }
@@ -150,7 +163,7 @@ func Mode(mode string) ElementsOption {
 // This will panic if the selector contains a newline.
 func Selector(selector string) ElementsOption {
 	if strings.Contains(selector, "\n") {
-		panic(errors.New(`Selectors cannot contain newlines`))
+		panic(errors.New(`selectors cannot contain newlines`))
 	}
 	return func(p *elements) { p.selector = selector }
 }
@@ -196,13 +209,12 @@ func (p *elements) appendEvent(buf []byte) []byte {
 
 	buf = append(buf, elementsPrefix...)
 	for len(contentBytes) > 0 {
-		ofs := bytes.IndexByte(contentBytes, '\n')
-		if ofs < 0 {
-			buf, contentBytes = append(buf, contentBytes...), nil
-		} else {
-			buf, contentBytes = append(buf, contentBytes[:ofs]...), contentBytes[ofs+1:]
+		before, after, found := bytes.Cut(contentBytes, []byte{'\n'})
+		buf = append(buf, before...)
+		if found {
 			buf = append(buf, `&#10;`...)
 		}
+		contentBytes = after
 	}
 	buf = append(buf, '\n', '\n')
 	return buf
@@ -249,89 +261,6 @@ type Event interface {
 	// see https://data-star.dev/reference/sse_events for the events Datastar supports.
 }
 
-// appendEventType appends the event type to a buffer of server sent events for output.  This does not check for
-// newlines, therefore eventType must be well controlled.
-func appendEventType(buf []byte, eventType string) []byte {
-	buf = append(buf, `event: `...)
-	buf = append(buf, eventType...)
-	buf = append(buf, '\n')
-	return buf
-}
-
-// appendEventElement appends HTML elements to an event; unlike many other of the appendEvent utilities, this WILL
-// check for newlines and encode them using HTML entities.
-func appendEventElement(buf []byte, element []byte) []byte {
-	buf = append(buf, `data: elements `...)
-	for len(element) > 0 {
-		ofs := bytes.IndexByte(element, '\n')
-		if ofs < 0 {
-			buf, element = append(buf, element...), nil
-		} else {
-			buf, element = append(buf, element[:ofs]...), element[ofs+1:]
-			// according to https://data-star.dev/reference/sse_events#datastar-patch-elements
-			// we could also use "\ndata: elements "
-			buf = append(buf, `&#10;`...)
-		}
-	}
-	buf = append(buf, '\n')
-	// TODO: check the upstream Go implementation of the SDK, and file a PR if they aren't checking for newlines in
-	// the patch -- this could lead to some pretty tricky event smuggling attacks in Datastar applications.
-	return buf
-}
-
-// appendEventMode appends mode data to an event, this does not check the selector for newlines
-func appendEventSelector(buf []byte, selector string) []byte {
-	buf = append(buf, `data: selector `...)
-	buf = append(buf, selector...)
-	buf = append(buf, '\n')
-	return buf
-}
-
-// appendEventMode appends mode data to an event, this does not check the mode for newlines.
-func appendEventMode(buf []byte, mode string) []byte {
-	buf = append(buf, `data: mode `...)
-	buf = append(buf, mode...)
-	buf = append(buf, '\n')
-	return buf
-}
-
-// appendEventString appends data to an event to a buffer of server sent events for output.  This does not check dataType
-// or data for newlines
-func appendEventString(buf []byte, dataType string, data string) []byte {
-	buf = append(buf, `data: `...)
-	buf = append(buf, dataType...)
-	buf = append(buf, ' ')
-	buf = append(buf, data...)
-	buf = append(buf, '\n')
-	return buf
-}
-
-// appendEventBytes appends data to an event to a buffer of server sent events for output.  This does not check dataType
-// or data for newlines
-func appendEventBytes(buf []byte, dataType string, data []byte) []byte {
-	buf = append(buf, `data: `...)
-	buf = append(buf, dataType...)
-	buf = append(buf, ' ')
-	buf = append(buf, data...)
-	buf = append(buf, '\n')
-	return buf
-}
-
-func writeError(w http.ResponseWriter, r *http.Request, err error) {
-	status := 500
-	if impl, ok := err.(interface{ HTTPStatus() int }); ok {
-		status = impl.HTTPStatus()
-	}
-	if acceptsJSON(r) {
-		writeJSON(w, status, struct {
-			Status int   `json:"status"`
-			Err    error `json:"error"`
-		}{status, err})
-	} else {
-		writeText(w, status, err.Error())
-	}
-}
-
 func acceptsJSON(r *http.Request) bool {
 	return acceptsContentTypes(r, `application/json`, `application/*`, `*/*`)
 }
@@ -347,7 +276,7 @@ func acceptsContentTypes(r *http.Request, contentTypes ...string) bool {
 	}
 
 	for _, header := range headers {
-		for _, accept := range strings.Split(header, `,`) {
+		for accept := range strings.SplitSeq(header, `,`) {
 			accept = strings.SplitN(accept, `;`, 2)[0]
 			accept = strings.TrimSpace(accept)
 			if slices.Contains(contentTypes, accept) {
@@ -381,12 +310,4 @@ func writeJSON(w http.ResponseWriter, httpStatus int, data any) {
 	h.Set(`Content-Length`, strconv.Itoa(len(msg)))
 	w.WriteHeader(httpStatus)
 	_, _ = w.Write(msg)
-}
-
-func writeText(w http.ResponseWriter, httpStatus int, text string) {
-	h := w.Header()
-	h.Set(`Content-Type`, `text/plain`)
-	h.Set(`Content-Length`, strconv.Itoa(len(text)))
-	w.WriteHeader(httpStatus)
-	_, _ = w.Write([]byte(text))
 }

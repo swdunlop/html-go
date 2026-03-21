@@ -549,21 +549,3 @@ func TestWriteJSON(t *testing.T) {
 	}
 }
 
-func TestWriteText(t *testing.T) {
-	w := httptest.NewRecorder()
-	text := "hello world"
-
-	writeText(w, 201, text)
-
-	if w.Code != 201 {
-		t.Errorf("expected status 201, got %d", w.Code)
-	}
-
-	if ct := w.Header().Get("Content-Type"); ct != "text/plain" {
-		t.Errorf("expected Content-Type text/plain, got %s", ct)
-	}
-
-	if body := w.Body.String(); body != text {
-		t.Errorf("expected body %s, got %s", text, body)
-	}
-}

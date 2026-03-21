@@ -160,7 +160,6 @@ func (cfg *config) arrayAsContent(data gjson.Result, path string) html.Content {
 			cfg.asContent(value, path+strconv.Itoa(ix)),
 			html.HTML(`</div>`),
 		})
-		ix++
 	}
 	table = append(table, html.HTML(`</div>`))
 	return table
