@@ -148,6 +148,14 @@ func Elements(content html.Content, options ...ElementsOption) Event {
 	return &evt
 }
 
+// Remove produces a Datastar event with mode "remove" for the specified selector.
+func Remove(selector string) Event {
+	if strings.Contains(selector, "\n") {
+		panic(errors.New(`selectors cannot contain newlines`))
+	}
+	return &removeEvent{selector}
+}
+
 // Mode affects how elements are patched by Datastar.  The last Mode specified as an option "wins."
 //
 // This will panic if the mode contains a newline.
@@ -170,6 +178,19 @@ func Selector(selector string) ElementsOption {
 
 // ElementsOption affects how elements are patched by the Datastar client.
 type ElementsOption func(*elements)
+
+type removeEvent struct{ selector string }
+
+// appendEvent implements [Event].
+func (d *removeEvent) appendEvent(buf []byte) []byte {
+	const (
+		eventPrefix = "event: datastar-patch-elements\ndata: mode remove\ndata: selector "
+	)
+	buf = append(buf, eventPrefix...)
+	buf = append(buf, d.selector...)
+	buf = append(buf, '\n', '\n')
+	return buf
+}
 
 type elements struct {
 	content  html.Content
