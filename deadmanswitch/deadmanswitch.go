@@ -136,26 +136,47 @@ func (cfg *config) assembleHTML() {
 	cfg.html = buf.Bytes()
 }
 
+// The script closes its EventSource on pagehide and reopens it on pageshow.
+// Browsers do not tear down a page entering the back/forward cache: without
+// this, a parked page keeps its SSE socket open, and a handful of navigations
+// can exhaust the browser's same-origin connection budget (six under HTTP/1.1),
+// after which new requests silently never leave the browser.  A page restored
+// from that cache reopens through the same state machine as any other lost
+// connection, so OnReconnect hooks fire.
 const (
 	beforePath = `<script>(function(){
 	if (window.dms != undefined) return;
-	const sse = new EventSource(`
-
-	afterPath = `);
-	const dms = {on: {connect: [], disconnect: [], reconnect: []}, connected: null, sse: sse};
+	const dms = {on: {connect: [], disconnect: [], reconnect: []}, connected: null, sse: null};
 	window.dms = dms;
 	const run = function(hook) { dms.on[hook].map(function(f) { f(); }); };
-	sse.addEventListener('open', function(){
-		if (dms.connected == true) return;
-		try {
-			if (dms.connected == null) { run('connect') } else { run('reconnect') };
-		} finally {
-			dms.connected = true;
-		};
+	const open = function() {
+		if (dms.sse != null) return;
+		const sse = new EventSource(`
+
+	afterPath = `);
+		dms.sse = sse;
+		sse.addEventListener('open', function(){
+			if (dms.connected == true) return;
+			try {
+				if (dms.connected == null) { run('connect') } else { run('reconnect') };
+			} finally {
+				dms.connected = true;
+			};
+		});
+		sse.addEventListener('error', function(){
+			if (dms.connected != true) return;
+			try { run('disconnect'); } finally { dms.connected = false; };
+		});
+	};
+	open();
+	window.addEventListener('pagehide', function(){
+		if (dms.sse == null) return;
+		dms.sse.close();
+		dms.sse = null;
 	});
-	sse.addEventListener('error', function(){
-		if (dms.connected != true) return;
-		try { run('disconnect'); } finally { dms.connected = false; };
+	window.addEventListener('pageshow', function(evt){
+		if (evt.persisted && dms.connected == true) dms.connected = false;
+		open();
 	});
 `
 	afterExprs = "})()</script>\n"
